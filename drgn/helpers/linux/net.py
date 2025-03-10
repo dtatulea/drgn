@@ -260,3 +260,17 @@ def skb_shinfo(skb: Object) -> Object:
         return cast("struct skb_shared_info *", skb.head + skb.end)
     else:
         return cast("struct skb_shared_info *", skb.end)
+
+
+def is_pp_page(page: Object) -> bool:
+    """
+    Check if given page is a page_pool page.
+
+    :param page: ``struct page *``
+    """
+    PP_SIGNATURE = 0xdead000000000040
+
+    try:
+        return page.pp_magic & PP_SIGNATURE == PP_SIGNATURE
+    except:
+        return False
