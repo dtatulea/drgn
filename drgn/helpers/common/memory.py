@@ -17,9 +17,10 @@ import drgn
 from drgn import FaultError, IntegerLike, Object, PlatformFlags, Program, SymbolKind
 from drgn.helpers.common.format import escape_ascii_string
 from drgn.helpers.common.prog import takes_program_or_default
-from drgn.helpers.linux.mm import find_vmap_area, in_direct_map
+from drgn.helpers.linux.mm import find_vmap_area, in_direct_map, virt_to_page
 from drgn.helpers.linux.pid import for_each_task
 from drgn.helpers.linux.slab import _find_containing_slab, _get_slab_cache_helper
+from drgn.helpers.linux.net import is_pp_page
 
 __all__ = (
     "identify_address",
@@ -103,6 +104,24 @@ def _identify_kernel_address(
         # Virtual address translation isn't implemented for this
         # architecture.
         direct_map = False
+
+    try:
+        page = Object(prog, "struct page", address=addr)
+        if is_pp_page(page):
+            pp = page.pp
+            detached = "yes" if pp.user.detach_time > 0 else "no"
+            dev = pp.slow.netdev.name.string_().decode() if pp.slow.netdev else "???"
+            return f"page ref in page_pool id: {pp.user.id.value_()}, dev {dev}, detached: {detached}"
+        else:
+            page = virt_to_page(addr)
+            if is_pp_page(page):
+                pp = page.pp
+                detached = "yes" if pp.user.detach_time > 0 else "no"
+                dev = pp.slow.netdev.name.string_().decode() if pp.slow.netdev else "???"
+                return f"page offset in page {hex(page)} page_pool id: {pp.user.id.value_()}, dev {dev}, detached: {detached}"
+
+    except:
+        pass
 
     if direct_map:
         result = _find_containing_slab(prog, addr)
